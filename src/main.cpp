@@ -28,18 +28,20 @@ static lv_color_t *disp_draw_buf1;
 static lv_display_t *disp_drv;
 
 MutexManager mutex_manager;
-lv_ui guider_ui; // Struktur UI didefinisikan pada file gui_guider.h
+lv_ui guider_ui;
 
 volatile uint16_t touch_x = 0, touch_y = 0;
 volatile int touch_state = 0;
 
-// --- Callback untuk flush display pada LVGL ---
+bool send_hex_flag = false;
+
+//--- Callback untuk flush display LVGL ---
 void lvgl_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p) {
     gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, area->x2 - area->x1 + 1, area->y2 - area->y1 + 1);
     lv_display_flush_ready(disp);
 }
 
-// --- Callback untuk membaca input sentuhan ---
+//--- Callback untuk membaca input touch ---
 void my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data) {
     if (touch_state == 1) {
         data->state = LV_INDEV_STATE_PRESSED;
@@ -50,7 +52,7 @@ void my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data) {
     }
 }
 
-// --- Task untuk memindai touch panel ---
+//--- Task untuk memindai touch panel ---
 void touchTask(void *pvParameters) {
     while (1) {
         if (xSemaphoreTake(mutex_manager.myMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -62,7 +64,7 @@ void touchTask(void *pvParameters) {
     }
 }
 
-// --- Inisialisasi Display dan LVGL ---
+//--- Inisialisasi Display dan LVGL ---
 void init_display() {
     gfx->begin();
     gfx->fillScreen(BLACK);
@@ -80,26 +82,35 @@ void init_display() {
     lv_display_set_buffers(disp_drv, disp_draw_buf1, NULL, SCREEN_WIDTH * 100, LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
-// --- Inisialisasi Touchscreen ---
+//--- Inisialisasi Touch ---
 void init_touch() {
     CHSC6540_init();
     lv_indev_t *indev_touch = lv_indev_create();
     lv_indev_set_type(indev_touch, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev_touch, my_touchpad_read);
-    Serial.println("Touchscreen initialized.");
 }
 
-// --- Inisialisasi UI ---
+void btn_3_event_handler(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+      Serial.println("========== TOMBOL DITEKAN ----- TOMBOL DITEKAN ==========");
+      send_hex_flag = true;
+    }
+}
+
+//--- Inisialisasi UI dan event handler ---
 void init_ui() {
     setup_ui(&guider_ui);          
     events_init(&guider_ui);
     init_scr_del_flag(&guider_ui);
-    setup_scr_screen_3(&guider_ui);
 
-    Serial.println("UI initialized.");
+    // Hanya membuat tampilan untuk screen 3
+    setup_scr_screen_3(&guider_ui);
+    lv_scr_load(guider_ui.screen_3);
+
+    lv_obj_add_event_cb(guider_ui.screen_3_btn_3, btn_3_event_handler, LV_EVENT_CLICKED, NULL);
 }
 
-// --- Task LVGL utama ---
+//--- Task utama LVGL ---
 void lvglTask(void *pvParameters) {
     TickType_t lastWakeTime = xTaskGetTickCount();
     while (1) {
@@ -109,53 +120,76 @@ void lvglTask(void *pvParameters) {
     }
 }
 
-// --- Kode UART (penerimaan data) ---
+//========== KODE PENERIMA DATA UART ==========
+
+// Buffer untuk data UART
 uint8_t uartByteBuffer[4];
 uint8_t uartByteCount = 0;
+
+// Variabel untuk menyimpan nilai decoded
 int trendent;
 int tilting;
 int statusInfrared = 0;
 
+// Fungsi decode data dari data 32-bit mengambil tilting, trendent, dan statusInfrared
 void decodeData(uint32_t encodedData) {
     trendent = ((encodedData >> 24) & 0xFF) - 40;
     tilting  = ((encodedData >> 16) & 0xFF) - 40;
     statusInfrared = (encodedData >> 14) & 0x1;
-
+    
+    // Cetak ke serial menggunakan string untuk status infrared
     Serial.printf("Decoded -> Trendent: %d, Tilting: %d, Infrared: ", trendent, tilting);
-    Serial.println((statusInfrared == 1) ? "Error" : "Normal");
+    if (statusInfrared == 1) {
+        Serial.println("Error");
+    } else {
+        Serial.println("Normal");
+    }
 }
 
+// Fungsi update tampilan LVGL dengan nilai tilting, trendent, dan statusInfrared  
 void update_labels_async(void * param) {
     int *values = (int *) param;
     char buf[16];
-
+    
+    // Update label tilting 
     sprintf(buf, "%d", values[0]);
     lv_label_set_text(guider_ui.screen_3_label_3, buf);
-
+    
+    // Update label trendent 
     sprintf(buf, "%d", values[1]);
     lv_label_set_text(guider_ui.screen_3_label_5, buf);
 
-    lv_label_set_text(guider_ui.screen_3_label_7, values[2] == 1 ? "Error" : "Normal");
-
+    // Update label infrared
+    if (values[2] == 1) {
+        lv_label_set_text(guider_ui.screen_3_label_7, "Error");
+    } else {
+        lv_label_set_text(guider_ui.screen_3_label_7, "Normal");
+    }
+    
     free(values);
 }
 
+// Task untuk membaca data dari Serial2 dan update UI
 void uartTask(void *pvParameters) {
+    // Inisialisasi Serial2 untuk komunikasi UART
     Serial2.begin(9600, SERIAL_8N1, 44, 43); 
     Serial.println("UART Task started, menunggu data...");
     
     for (;;) {
+        // Cek ketersediaan data
         while (Serial2.available()) {
             uartByteBuffer[uartByteCount++] = Serial2.read();
+            // Jika buffer sudah penuh, proses data
             if (uartByteCount == 4) {
-                uint32_t encodedData = ((uint32_t)uartByteBuffer[3] << 24) |
-                                         ((uint32_t)uartByteBuffer[2] << 16) |
-                                         ((uint32_t)uartByteBuffer[1] << 8)  |
-                                         ((uint32_t)uartByteBuffer[0]);
+                uint32_t encodedData = ((uint32_t)uartByteBuffer[0] << 24) |
+                                         ((uint32_t)uartByteBuffer[3] << 16) |
+                                         ((uint32_t)uartByteBuffer[2] << 8)  |
+                                         ((uint32_t)uartByteBuffer[1]);
                 
                 Serial.printf("Encoded Data: 0x%08X\n", encodedData);
                 decodeData(encodedData);
                 
+                // Alokasikan array untuk 3 integer (tilting, trendent, infrared)
                 int *values = (int *)malloc(3 * sizeof(int));
                 if (values) {
                     values[0] = tilting;
@@ -166,71 +200,48 @@ void uartTask(void *pvParameters) {
                     Serial.println("Error alokasi memori untuk update UI!");
                 }
                 
-                uartByteCount = 0;
+                uartByteCount = 0;  // Reset buffer
             }
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
-// // --- Callback untuk menangani event sentuhan ---
-// static void screen_3_btn_3 (lv_event_t * e) {
-//     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-//         Serial.println("Screen 3 Checking Update ditekan, mengirim data...");
-//         uint8_t data[] = {0xFA, 0xFA, 0xFA};
-//         Serial2.write(data, sizeof(data)); // Mengirim data hex
-//         vTaskDelay(pdMS_TO_TICKS(300)); // Cek setiap 1 detik
-//         Serial2.write(data, sizeof(data)); // Mengirim data hex
-//         vTaskDelay(pdMS_TO_TICKS(300)); // Cek setiap 1 detik
-//         Serial2.write(data, sizeof(data)); // Mengirim data hex
-//     }
-// }
-
-// extern "C" void send_update_request() {
-//     uint8_t data = 0xFA;
-//     Serial2.write(data);
-//     Serial.println("Data 0xFA dikirim dari event handler.");
-// }
-
-extern "C" void send_update_request() {
-    uint8_t data = 0xFA;
-
-    Serial2.write(data);
-    Serial.println("Data 0xFA dikirim dari event handler.");
-    vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
-
-    Serial2.write(data);
-    Serial.println("Data 0xFA dikirim dari event handler.");
-    vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
-
-    Serial2.write(data);
-    Serial.println("Data 0xFA dikirim dari event handler.");
-}
-
-
-// --- Fungsi setup() ---
+//========== SETUP DAN LOOP ==========
 void setup() {
-    // Inisialisasi I2C untuk touch (sesuaikan pin jika diperlukan)
     Wire.setPins(TOUCH_SDA, TOUCH_SCL);
     Wire.begin();
-
     Serial.begin(9600);
+    // Serial2.begin(9600, SERIAL_8N1, 44, 43);
     mutex_manager.initMutex();
     
     init_display();
     init_touch();
     init_ui();
     
-    // Buat task untuk LVGL, Touch, dan UART via FreeRTOS
+    // Buat task LVGL, touch, dan UART pada core yang sesuai
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 0);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, NULL, 1);
-    // xTaskCreatePinnedToCore(sendTask, "Send Task", 2048, NULL, 1, NULL, 1);
     
     Serial.println("Setup complete, running.");
 }
 
-// --- Fungsi loop() ---
 void loop() {
-    // Loop utama kosong karena FreeRTOS meng-handle semua task.
+    if (send_hex_flag) {
+        uint8_t data = 0xFA;
+
+        Serial2.write(data);
+        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
+
+        Serial2.write(data);
+        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
+        
+        Serial2.write(data);
+        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
+
+        Serial.println("========== DATA DIKIRIM ----- DATA DIKIRIM ==========");
+        send_hex_flag = false;
+    }
+    delay(500);
 }

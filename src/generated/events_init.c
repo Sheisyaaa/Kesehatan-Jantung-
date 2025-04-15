@@ -7,16 +7,6 @@
 * terms, then you may not retain, install, activate or otherwise use the software.
 */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void send_update_request(void);  // Deklarasi fungsi dari C++
-
-#ifdef __cplusplus
-}
-#endif
-
 #include "events_init.h"
 #include <stdio.h>
 #include "lvgl.h"
@@ -244,7 +234,6 @@ static void screen_3_btn_3_event_handler (lv_event_t *e)
     {
         lv_obj_add_flag(guider_ui.screen_3_calibrate_start, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(guider_ui.screen_3_calibrate_done, LV_OBJ_FLAG_HIDDEN);
-        send_update_request();
         break;
     }
     default:
