@@ -90,24 +90,71 @@ void init_touch() {
     lv_indev_set_read_cb(indev_touch, my_touchpad_read);
 }
 
-void btn_3_event_handler(lv_event_t *e) {
+// Callback untuk event tombol
+void btn3_event_handler(lv_event_t *e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-      Serial.println("========== TOMBOL DITEKAN ----- TOMBOL DITEKAN ==========");
-      send_hex_flag = true;
+        if (!send_hex_flag) {  // Pastikan hanya sekali
+
+            uint8_t data = 0xFA;
+            Serial2.write(data); 
+
+            Serial.println("=== DATA DIKIRIM ===");
+            vTaskDelay(pdMS_TO_TICKS(300));
+
+            Serial2.write(data);
+            Serial.println("=== DATA DIKIRIM ===");
+            vTaskDelay(pdMS_TO_TICKS(300));
+
+            Serial2.write(data);
+            Serial.println("=== DATA DIKIRIM ===");
+            vTaskDelay(pdMS_TO_TICKS(300));
+
+            send_hex_flag = true;  // Set flag untuk mencegah pengiriman berulang
+        }
+    } else {
+        send_hex_flag = false;  // Reset flag jika tombol tidak ditekan
     }
 }
 
-//--- Inisialisasi UI dan event handler ---
+// --- Task untuk memonitor touch dan cek apakah tombol 3 ditekan ---
+void screenMonitorTask(void *pvParameters) {
+    lv_obj_t *lastScreen = NULL;
+
+    while (1) {
+        lv_obj_t *currentScreen = lv_scr_act();  // Ambil screen aktif saat ini
+
+        // Cek apakah screen yang aktif berbeda dengan sebelumnya
+        if (currentScreen != lastScreen) {
+            lastScreen = currentScreen;  // Update lastScreen
+
+            // Cek layar aktif dan tampilkan status di Serial Monitor
+            if (currentScreen == guider_ui.screen_1) {
+                Serial.println("1");
+            } else if (currentScreen == guider_ui.screen_2) {
+                Serial.println("2");
+            } else if (currentScreen == guider_ui.screen_3) {
+                Serial.println("3");
+
+                // Pastikan tombol memiliki event handler yang benar
+                lv_obj_t *btn3 = guider_ui.screen_3_btn_3;  // Ambil objek tombol
+                if (btn3 != NULL) {
+                    // Tambahkan event handler jika belum ada
+                    lv_obj_add_event_cb(btn3, btn3_event_handler, LV_EVENT_ALL, NULL);
+                }
+            } else {
+                Serial.println("Aktif: Screen tidak diketahui");
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(500)); // Delay 500 ms (0.5 detik)
+    }
+}
+
+// --- Inisialisasi UI dan event handler ---
 void init_ui() {
     setup_ui(&guider_ui);          
     events_init(&guider_ui);
     init_scr_del_flag(&guider_ui);
-
-    // Hanya membuat tampilan untuk screen 3
-    setup_scr_screen_3(&guider_ui);
-    lv_scr_load(guider_ui.screen_3);
-
-    lv_obj_add_event_cb(guider_ui.screen_3_btn_3, btn_3_event_handler, LV_EVENT_CLICKED, NULL);
 }
 
 //--- Task utama LVGL ---
@@ -223,25 +270,11 @@ void setup() {
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 0);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 0);
     
     Serial.println("Setup complete, running.");
 }
 
 void loop() {
-    if (send_hex_flag) {
-        uint8_t data = 0xFA;
-
-        Serial2.write(data);
-        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
-
-        Serial2.write(data);
-        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
-        
-        Serial2.write(data);
-        vTaskDelay(pdMS_TO_TICKS(300)); // Delay 300ms
-
-        Serial.println("========== DATA DIKIRIM ----- DATA DIKIRIM ==========");
-        send_hex_flag = false;
-    }
-    delay(500);
+    //kosongkan loop() 
 }
