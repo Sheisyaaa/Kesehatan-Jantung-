@@ -27,7 +27,7 @@ static void screen_1_event_handler (lv_event_t *e)
         case LV_DIR_LEFT:
         {
             lv_indev_wait_release(lv_indev_active());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_2, guider_ui.screen_2_del, &guider_ui.screen_1_del, setup_scr_screen_2, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 200, false, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_2, guider_ui.screen_2_del, &guider_ui.screen_1_del, setup_scr_screen_2, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, true, true);
             break;
         }
         default:
@@ -53,16 +53,16 @@ static void screen_2_event_handler (lv_event_t *e)
     {
         lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
         switch(dir) {
-        case LV_DIR_RIGHT:
-        {
-            lv_indev_wait_release(lv_indev_active());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_1, guider_ui.screen_1_del, &guider_ui.screen_2_del, setup_scr_screen_1, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 200, true, true);
-            break;
-        }
         case LV_DIR_LEFT:
         {
             lv_indev_wait_release(lv_indev_active());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_3, guider_ui.screen_3_del, &guider_ui.screen_2_del, setup_scr_screen_3, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 200, true, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_3, guider_ui.screen_3_del, &guider_ui.screen_2_del, setup_scr_screen_3, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, true, true);
+            break;
+        }
+        case LV_DIR_RIGHT:
+        {
+            lv_indev_wait_release(lv_indev_active());
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_1, guider_ui.screen_1_del, &guider_ui.screen_2_del, setup_scr_screen_1, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
         default:
@@ -91,7 +91,7 @@ static void screen_3_event_handler (lv_event_t *e)
         case LV_DIR_RIGHT:
         {
             lv_indev_wait_release(lv_indev_active());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_2, guider_ui.screen_2_del, &guider_ui.screen_3_del, setup_scr_screen_2, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 200, true, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_2, guider_ui.screen_2_del, &guider_ui.screen_3_del, setup_scr_screen_2, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, true, true);
             break;
         }
         default:

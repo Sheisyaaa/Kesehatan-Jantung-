@@ -97,12 +97,9 @@ void btn3_event_handler(lv_event_t *e) {
 
             uint8_t data = 0xFA;
             Serial2.write(data); 
-
-            Serial.println("=== DATA DIKIRIM ===");
             vTaskDelay(pdMS_TO_TICKS(300));
 
             Serial2.write(data);
-            Serial.println("=== DATA DIKIRIM ===");
             vTaskDelay(pdMS_TO_TICKS(300));
 
             Serial2.write(data);
@@ -267,10 +264,10 @@ void setup() {
     init_ui();
     
     // Buat task LVGL, touch, dan UART pada core yang sesuai
-    xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 0);
-    xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 1);
     
     Serial.println("Setup complete, running.");
 }

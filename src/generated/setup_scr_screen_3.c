@@ -54,7 +54,7 @@ void setup_scr_screen_3(lv_ui *ui)
 
     //Write codes screen_3_label_9
     ui->screen_3_label_9 = lv_label_create(ui->screen_3);
-    lv_obj_set_pos(ui->screen_3_label_9, 251, 54);
+    lv_obj_set_pos(ui->screen_3_label_9, 251, 53);
     lv_obj_set_size(ui->screen_3_label_9, 47, 25);
     lv_label_set_text(ui->screen_3_label_9, "Update\nFirmware");
     lv_label_set_long_mode(ui->screen_3_label_9, LV_LABEL_LONG_WRAP);
@@ -815,7 +815,7 @@ void setup_scr_screen_3(lv_ui *ui)
 
     //Write codes screen_3_label_19
     ui->screen_3_label_19 = lv_label_create(ui->screen_3_header_calibrate);
-    lv_obj_set_pos(ui->screen_3_label_19, 5, 7);
+    lv_obj_set_pos(ui->screen_3_label_19, 47, 82);
     lv_obj_set_size(ui->screen_3_label_19, 102, 13);
     lv_label_set_text(ui->screen_3_label_19, "Calibrate");
     lv_label_set_long_mode(ui->screen_3_label_19, LV_LABEL_LONG_WRAP);
