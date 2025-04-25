@@ -35,6 +35,8 @@ volatile int touch_state = 0;
 
 bool send_hex_flag = false;
 
+TaskHandle_t uartTaskHandle = NULL;  // Tambahkan handle untuk task UART
+
 //--- Callback untuk flush display LVGL ---
 void lvgl_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p) {
     gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, area->x2 - area->x1 + 1, area->y2 - area->y1 + 1);
@@ -126,11 +128,17 @@ void screenMonitorTask(void *pvParameters) {
 
             // Cek layar aktif dan tampilkan status di Serial Monitor
             if (currentScreen == guider_ui.screen_1) {
-                Serial.println("1");
+                Serial.println("SCREEN 1");
+                if (uartTaskHandle != NULL) {
+                    vTaskSuspend(uartTaskHandle);  // Suspend UART task
+                }
             } else if (currentScreen == guider_ui.screen_2) {
-                Serial.println("2");
+                Serial.println("SCREEN 2");
+                if (uartTaskHandle != NULL) {
+                    vTaskSuspend(uartTaskHandle);  // Suspend UART task
+                }
             } else if (currentScreen == guider_ui.screen_3) {
-                Serial.println("3");
+                Serial.println("SCREEN 3");
 
                 // Pastikan tombol memiliki event handler yang benar
                 lv_obj_t *btn3 = guider_ui.screen_3_btn_3;  // Ambil objek tombol
@@ -138,8 +146,15 @@ void screenMonitorTask(void *pvParameters) {
                     // Tambahkan event handler jika belum ada
                     lv_obj_add_event_cb(btn3, btn3_event_handler, LV_EVENT_ALL, NULL);
                 }
+
+                if (uartTaskHandle != NULL) {
+                    vTaskResume(uartTaskHandle);  // Resume UART task
+                }
             } else {
                 Serial.println("Aktif: Screen tidak diketahui");
+                if (uartTaskHandle != NULL) {
+                    vTaskSuspend(uartTaskHandle);  // Suspend UART task
+                }
             }
         }
 
@@ -173,20 +188,67 @@ uint8_t uartByteCount = 0;
 // Variabel untuk menyimpan nilai decoded
 int trendent;
 int tilting;
+int current; 
+int idleStatus = 0;
+int statusInclino = 0;
 int statusInfrared = 0;
+int outputA =  0;
+int outputB =  0;
+int motorC =  0;
 
-// Fungsi decode data dari data 32-bit mengambil tilting, trendent, dan statusInfrared
+// Fungsi decode data dari data 32-bit mengambil tilting, trendent, statusInfrared, current, dan data tambahan
 void decodeData(uint32_t encodedData) {
     trendent = ((encodedData >> 24) & 0xFF) - 40;
     tilting  = ((encodedData >> 16) & 0xFF) - 40;
     statusInfrared = (encodedData >> 14) & 0x1;
-    
-    // Cetak ke serial menggunakan string untuk status infrared
-    Serial.printf("Decoded -> Trendent: %d, Tilting: %d, Infrared: ", trendent, tilting);
+    current = (encodedData & 0x1F) + 1;
+    if (current > 22)
+    {
+        current = 0;
+    }
+
+    // Decode data tambahan
+    statusInclino = (encodedData >> 15) & 0x1;
+    idleStatus = (encodedData >> 13) & 0x1;
+    outputA = (encodedData >> 11) & 0x3;
+    outputB = (encodedData >> 9) & 0x3;
+    motorC = (encodedData >> 8) & 0x1;
+
+    // Cetak ke serial menggunakan if-else untuk semua data
+    Serial.printf("Decoded -> Trendent: %d, Tilting: %d, Current: %d\n", trendent, tilting, current);
+
+    // Status Infrared
     if (statusInfrared == 1) {
-        Serial.println("Error");
+        Serial.println("Infrared: Error");
     } else {
-        Serial.println("Normal");
+        Serial.println("Infrared: Normal");
+    }
+
+    // Status Inclino
+    if (statusInclino == 1) {
+        Serial.println("StatusInclino: Error");
+    } else {
+        Serial.println("StatusInclino: Normal");
+    }
+
+    // Idle Status
+    if (idleStatus == 1) {
+        Serial.println("IdleStatus: ON");
+    } else {
+        Serial.println("IdleStatus: OFF");
+    }
+
+    // Output A
+    Serial.printf("OutputA: %d\n", outputA);
+
+    // Output B
+    Serial.printf("OutputB: %d\n", outputB);
+
+    // Motor C
+    if (motorC == 1) {
+        Serial.println("MotorC: On");
+    } else {
+        Serial.println("MotorC: Off");
     }
 }
 
@@ -228,7 +290,7 @@ void uartTask(void *pvParameters) {
                 uint32_t encodedData = ((uint32_t)uartByteBuffer[0] << 24) |
                                          ((uint32_t)uartByteBuffer[3] << 16) |
                                          ((uint32_t)uartByteBuffer[2] << 8)  |
-                                         ((uint32_t)uartByteBuffer[1]);
+                                         ((uint32_t)uartByteBuffer[1]); 
                 
                 Serial.printf("Encoded Data: 0x%08X\n", encodedData);
                 decodeData(encodedData);
@@ -256,7 +318,6 @@ void setup() {
     Wire.setPins(TOUCH_SDA, TOUCH_SCL);
     Wire.begin();
     Serial.begin(9600);
-    // Serial2.begin(9600, SERIAL_8N1, 44, 43);
     mutex_manager.initMutex();
     
     init_display();
@@ -266,7 +327,7 @@ void setup() {
     // Buat task LVGL, touch, dan UART pada core yang sesuai
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, &uartTaskHandle, 1);  // Simpan handle task UART
     xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 1);
     
     Serial.println("Setup complete, running.");
