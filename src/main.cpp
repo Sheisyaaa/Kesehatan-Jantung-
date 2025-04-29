@@ -196,60 +196,30 @@ int outputA =  0;
 int outputB =  0;
 int motorC =  0;
 
-// Fungsi decode data dari data 32-bit mengambil tilting, trendent, statusInfrared, current, dan data tambahan
+// Fungsi decode data  
 void decodeData(uint32_t encodedData) {
     trendent = ((encodedData >> 24) & 0xFF) - 40;
     tilting  = ((encodedData >> 16) & 0xFF) - 40;
     statusInfrared = (encodedData >> 14) & 0x1;
     current = (encodedData & 0x1F) + 1;
-    if (current > 22)
-    {
+    if (current > 22) {
         current = 0;
     }
-
-    // Decode data tambahan
     statusInclino = (encodedData >> 15) & 0x1;
     idleStatus = (encodedData >> 13) & 0x1;
     outputA = (encodedData >> 11) & 0x3;
     outputB = (encodedData >> 9) & 0x3;
     motorC = (encodedData >> 8) & 0x1;
 
-    // Cetak ke serial menggunakan if-else untuk semua data
-    Serial.printf("Decoded -> Trendent: %d, Tilting: %d, Current: %d\n", trendent, tilting, current);
+    Serial.printf("Decoded -> Trendent: %d, Tilting: %d, Current: %d, Infrared: %s, Inclino: %s\n",
+                  trendent, tilting, current,
+                  statusInfrared == 1 ? "Error" : "Normal",
+                  statusInclino == 1 ? "Error" : "Normal");
 
-    // Status Infrared
-    if (statusInfrared == 1) {
-        Serial.println("Infrared: Error");
-    } else {
-        Serial.println("Infrared: Normal");
-    }
-
-    // Status Inclino
-    if (statusInclino == 1) {
-        Serial.println("StatusInclino: Error");
-    } else {
-        Serial.println("StatusInclino: Normal");
-    }
-
-    // Idle Status
-    if (idleStatus == 1) {
-        Serial.println("IdleStatus: ON");
-    } else {
-        Serial.println("IdleStatus: OFF");
-    }
-
-    // Output A
-    Serial.printf("OutputA: %d\n", outputA);
-
-    // Output B
-    Serial.printf("OutputB: %d\n", outputB);
-
-    // Motor C
-    if (motorC == 1) {
-        Serial.println("MotorC: On");
-    } else {
-        Serial.println("MotorC: Off");
-    }
+    Serial.printf("IdleStatus: %s, OutputA: %d, OutputB: %d, MotorC: %s\n",
+                  idleStatus == 1 ? "ON" : "OFF",
+                  outputA, outputB,
+                  motorC == 1 ? "On" : "Off");
 }
 
 // Fungsi update tampilan LVGL dengan nilai tilting, trendent, dan statusInfrared  
