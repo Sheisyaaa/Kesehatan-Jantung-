@@ -19,6 +19,8 @@
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 170
 
+const int mosfetPin = 4;
+
 // Inisialisasi objek display fisik
 Arduino_DataBus *bus = new Arduino_ESP32SPI(11 /* DC */, 10 /* CS */, 12 /* SCK */, 13 /* MOSI */, GFX_NOT_DEFINED /* MISO */);
 Arduino_GFX *gfx = new Arduino_GC9A01(bus, 1 /* RST */, 1 /* rotation */, true /* IPS */, SCREEN_HEIGHT, SCREEN_WIDTH, 35 /* col offset 1 */, 0 /* row offset 1 */, 35 /* col offset 2 */, 0 /* row offset 2 */);
@@ -119,6 +121,9 @@ void btn3_event_handler(lv_event_t *e) {
 void screenMonitorTask(void *pvParameters) {
     lv_obj_t *lastScreen = NULL;
 
+    pinMode(mosfetPin, OUTPUT); // Atur pin MOSFET sebagai output
+    digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat awal
+
     while (1) {
         lv_obj_t *currentScreen = lv_scr_act();  // Ambil screen aktif saat ini
 
@@ -132,11 +137,26 @@ void screenMonitorTask(void *pvParameters) {
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
+                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
+
             } else if (currentScreen == guider_ui.screen_2) {
                 Serial.println("SCREEN 2");
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
+
+                while (lv_scr_act() == guider_ui.screen_2) {
+                    Serial.println("MOSFET: Charging");
+                    digitalWrite(mosfetPin, HIGH); // Nyalakan MOSFET
+                    lv_label_set_text(guider_ui.screen_2_label_6, "--CHARGING--");
+                    vTaskDelay(pdMS_TO_TICKS(5000)); // Tunggu 5 detik
+
+                    Serial.println("MOSFET: In Use");
+                    digitalWrite(mosfetPin, LOW); // Matikan MOSFET
+                    lv_label_set_text(guider_ui.screen_2_label_6, "--IN USE--");
+                    vTaskDelay(pdMS_TO_TICKS(5000)); // Tunggu 5 detik
+                }
+
             } else if (currentScreen == guider_ui.screen_3) {
                 Serial.println("SCREEN 3");
 
@@ -150,11 +170,14 @@ void screenMonitorTask(void *pvParameters) {
                 if (uartTaskHandle != NULL) {
                     vTaskResume(uartTaskHandle);  // Resume UART task
                 }
+                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
+
             } else {
                 Serial.println("Aktif: Screen tidak diketahui");
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
+                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
             }
         }
 
@@ -223,15 +246,15 @@ void decodeData(uint32_t encodedData) {
 }
 
 // Fungsi update tampilan LVGL dengan nilai tilting, trendent, dan statusInfrared  
-void update_labels_async(void * param) {
-    int *values = (int *) param;
+void update_labels_async(void *param) {
+    int *values = (int *)param;
     char buf[16];
-    
-    // Update label tilting 
+
+    // Update label tilting
     sprintf(buf, "%d", values[0]);
     lv_label_set_text(guider_ui.screen_3_label_3, buf);
-    
-    // Update label trendent 
+
+    // Update label trendent
     sprintf(buf, "%d", values[1]);
     lv_label_set_text(guider_ui.screen_3_label_5, buf);
 
@@ -241,7 +264,16 @@ void update_labels_async(void * param) {
     } else {
         lv_label_set_text(guider_ui.screen_3_label_7, "Normal");
     }
-    
+
+    // Update label MOSFET status (screen 2 label 6)
+    if (lv_scr_act() == guider_ui.screen_2) {
+        if (values[3] == HIGH) {
+            lv_label_set_text(guider_ui.screen_2_label_6, "Charging");
+        } else {
+            lv_label_set_text(guider_ui.screen_2_label_6, "In Use");
+        }
+    }
+
     free(values);
 }
 
@@ -265,12 +297,13 @@ void uartTask(void *pvParameters) {
                 Serial.printf("Encoded Data: 0x%08X\n", encodedData);
                 decodeData(encodedData);
                 
-                // Alokasikan array untuk 3 integer (tilting, trendent, infrared)
-                int *values = (int *)malloc(3 * sizeof(int));
+                // Alokasikan array untuk 4 integer (tilting, trendent, infrared, MOSFET status)
+                int *values = (int *)malloc(4 * sizeof(int));
                 if (values) {
                     values[0] = tilting;
                     values[1] = trendent;
                     values[2] = statusInfrared;
+                    values[3] = digitalRead(TFT_BL); // Assume MOSFET status is read from TFT_BL pin
                     lv_async_call(update_labels_async, (void *)values);
                 } else {
                     Serial.println("Error alokasi memori untuk update UI!");
@@ -299,7 +332,7 @@ void setup() {
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, &uartTaskHandle, 1);  // Simpan handle task UART
     xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 1);
-    
+
     Serial.println("Setup complete, running.");
 }
 
