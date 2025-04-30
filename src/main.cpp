@@ -95,41 +95,19 @@ void init_touch() {
 }
 
 //========== TASK UNTUK KONTROL MOSFET ==========
-void mosfetControlTask1(void *pvParameters) {
-    static bool is_charge = true;  // Status awal adalah "Charge"
-
+void mosfetAlternatingTask(void *pvParameters) {
     while (1) {
-        // Hanya aktif jika screen 1 sedang aktif
-        if (lv_scr_act() == guider_ui.screen_1) {
-            if (is_charge) {
-                digitalWrite(MOSFET_PIN_1, HIGH);  // Aktifkan MOSFET (HIGH)
-                lv_label_set_text(guider_ui.screen_1_label_6, "Charge");  // Update label
-            } else {
-                digitalWrite(MOSFET_PIN_1, LOW);  // Nonaktifkan MOSFET (LOW)
-                lv_label_set_text(guider_ui.screen_1_label_6, "Discharge");  // Update label
-            }
-            is_charge = !is_charge;
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));  // Delay 5 detik
-    }
-}
+        // Nyalakan MOSFET 1, matikan MOSFET 2
+        digitalWrite(MOSFET_PIN_1, HIGH);
+        digitalWrite(MOSFET_PIN_2, LOW);
+        Serial.println("MOSFET 1 ON, MOSFET 2 OFF");
+        vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
 
-void mosfetControlTask2(void *pvParameters) {
-    static bool is_charge = true;  // Status awal adalah "Charge"
-
-    while (1) {
-        // Hanya aktif jika screen 2 sedang aktif
-        if (lv_scr_act() == guider_ui.screen_2) {
-            if (is_charge) {
-                digitalWrite(MOSFET_PIN_2, HIGH);  // Aktifkan MOSFET (HIGH)
-                lv_label_set_text(guider_ui.screen_2_label_6, "Charge");  // Update label
-            } else {
-                digitalWrite(MOSFET_PIN_2, LOW);  // Nonaktifkan MOSFET (LOW)
-                lv_label_set_text(guider_ui.screen_2_label_6, "Discharge");  // Update label
-            }
-            is_charge = !is_charge;  // Toggle status untuk pergantian
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));  // Delay 5 detik
+        // Matikan MOSFET 1, nyalakan MOSFET 2
+        digitalWrite(MOSFET_PIN_1, LOW);
+        digitalWrite(MOSFET_PIN_2, HIGH);
+        Serial.println("MOSFET 1 OFF, MOSFET 2 ON");
+        vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
     }
 }
 
@@ -215,20 +193,6 @@ void update_labels_async(void *param) {
         lv_label_set_text(guider_ui.screen_3_label_7, "Error");
     } else {
         lv_label_set_text(guider_ui.screen_3_label_7, "Normal");
-    }
-
-    // Update label MOSFET (Screen 1)
-    if (values[3] == 1) {
-        lv_label_set_text(guider_ui.screen_1_label_6, "Charge");
-    } else if (values[3] == 0) {
-        lv_label_set_text(guider_ui.screen_1_label_6, "Discharge");
-    }
-
-    // Update label MOSFET (Screen 2)
-    if (values[4] == 1) {
-        lv_label_set_text(guider_ui.screen_2_label_6, "Charge");
-    } else if (values[4] == 0) {
-        lv_label_set_text(guider_ui.screen_2_label_6, "Discharge");
     }
 
     free(values);
@@ -340,11 +304,11 @@ void setup() {
     Serial.begin(9600);
     mutex_manager.initMutex();
     
-    pinMode(MOSFET_PIN_1, OUTPUT);  // Atur GPIO 4 sebagai output untuk kontrol MOSFET pertama
-    digitalWrite(MOSFET_PIN_1, LOW);  // Pastikan MOSFET pertama dalam kondisi awal nonaktif
+    pinMode(MOSFET_PIN_1, OUTPUT);  
+    digitalWrite(MOSFET_PIN_1, LOW);  
 
-    pinMode(MOSFET_PIN_2, OUTPUT);  // Atur GPIO 5 sebagai output untuk kontrol MOSFET kedua
-    digitalWrite(MOSFET_PIN_2, LOW);  // Pastikan MOSFET kedua dalam kondisi awal nonaktif
+    pinMode(MOSFET_PIN_2, OUTPUT);  
+    digitalWrite(MOSFET_PIN_2, LOW); 
     
     init_display();
     init_touch();
@@ -353,12 +317,9 @@ void setup() {
     // Buat task LVGL, touch, UART, dan screen monitor pada core yang sesuai
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, &uartTaskHandle, 1);  // Simpan handle task UART
+    xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, &uartTaskHandle, 1);  
     xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 1);
-
-    // Tambahkan task untuk kontrol MOSFET
-    xTaskCreatePinnedToCore(mosfetControlTask1, "MOSFET Control Task", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(mosfetControlTask2, "MOSFET Control Task 2", 2048, NULL, 1, NULL, 1);  // Task untuk MOSFET kedua
+    xTaskCreatePinnedToCore(mosfetAlternatingTask, "MOSFET Alternating Task", 2048, NULL, 1, NULL, 1);
 
     Serial.println("Setup complete, running.");
 }
