@@ -1,3 +1,4 @@
+//========== HEADER DAN DEFINISI ==========
 #include <Arduino.h>
 #include <lvgl.h>
 #include "gui_guider.h"
@@ -9,19 +10,20 @@
 #include "config.h"
 #include "touch.h"
 
+//========== DEFINISI PIN DAN KONFIGURASI ==========
 #define TFT_MOSI 35
 #define TFT_SCLK 36
 #define TFT_CS   40
 #define TFT_DC   41
 #define TFT_RST  42
 #define TFT_BL   38
+#define MOSFET_PIN_1  5
+#define MOSFET_PIN_2  4 
 
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 170
 
-const int mosfetPin = 4;
-
-// Inisialisasi objek display fisik
+//========== INISIALISASI OBJEK DAN VARIABEL ==========
 Arduino_DataBus *bus = new Arduino_ESP32SPI(11 /* DC */, 10 /* CS */, 12 /* SCK */, 13 /* MOSI */, GFX_NOT_DEFINED /* MISO */);
 Arduino_GFX *gfx = new Arduino_GC9A01(bus, 1 /* RST */, 1 /* rotation */, true /* IPS */, SCREEN_HEIGHT, SCREEN_WIDTH, 35 /* col offset 1 */, 0 /* row offset 1 */, 35 /* col offset 2 */, 0 /* row offset 2 */);
 
@@ -37,15 +39,14 @@ volatile int touch_state = 0;
 
 bool send_hex_flag = false;
 
-TaskHandle_t uartTaskHandle = NULL;  // Tambahkan handle untuk task UART
+TaskHandle_t uartTaskHandle = NULL;  
 
-//--- Callback untuk flush display LVGL ---
+//========== CALLBACK UNTUK DISPLAY DAN TOUCH ==========
 void lvgl_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p) {
     gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, area->x2 - area->x1 + 1, area->y2 - area->y1 + 1);
     lv_display_flush_ready(disp);
 }
 
-//--- Callback untuk membaca input touch ---
 void my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data) {
     if (touch_state == 1) {
         data->state = LV_INDEV_STATE_PRESSED;
@@ -56,7 +57,7 @@ void my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data) {
     }
 }
 
-//--- Task untuk memindai touch panel ---
+//========== TASK UNTUK TOUCH PANEL ==========
 void touchTask(void *pvParameters) {
     while (1) {
         if (xSemaphoreTake(mutex_manager.myMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -68,7 +69,7 @@ void touchTask(void *pvParameters) {
     }
 }
 
-//--- Inisialisasi Display dan LVGL ---
+//========== INISIALISASI DISPLAY DAN TOUCH ==========
 void init_display() {
     gfx->begin();
     gfx->fillScreen(BLACK);
@@ -79,14 +80,13 @@ void init_display() {
     lv_init();
 
     disp_draw_buf1 = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * SCREEN_WIDTH * 100, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    lv_draw_buf_init(&draw_buf, SCREEN_WIDTH, SCREEN_HEIGHT, LV_COLOR_FORMAT_RGB565, SCREEN_WIDTH, disp_draw_buf1, SCREEN_WIDTH * 20);
+    lv_draw_buf_init(&draw_buf, SCREEN_WIDTH, SCREEN_HEIGHT, LV_COLOR_FORMAT_RGB565, SCREEN_WIDTH, disp_draw_buf1, SCREEN_WIDTH * 100);
 
     disp_drv = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
     lv_display_set_flush_cb(disp_drv, lvgl_disp_flush);
     lv_display_set_buffers(disp_drv, disp_draw_buf1, NULL, SCREEN_WIDTH * 100, LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
-//--- Inisialisasi Touch ---
 void init_touch() {
     CHSC6540_init();
     lv_indev_t *indev_touch = lv_indev_create();
@@ -94,35 +94,65 @@ void init_touch() {
     lv_indev_set_read_cb(indev_touch, my_touchpad_read);
 }
 
-// Callback untuk event tombol
-void btn3_event_handler(lv_event_t *e) {
-    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        if (!send_hex_flag) {  // Pastikan hanya sekali
+//========== TASK UNTUK KONTROL MOSFET ==========
+void mosfetControlTask1(void *pvParameters) {
+    static bool is_charge = true;  // Status awal adalah "Charge"
 
-            uint8_t data = 0xFA;
-            Serial2.write(data); 
-            vTaskDelay(pdMS_TO_TICKS(300));
-
-            Serial2.write(data);
-            vTaskDelay(pdMS_TO_TICKS(300));
-
-            Serial2.write(data);
-            Serial.println("=== DATA DIKIRIM ===");
-            vTaskDelay(pdMS_TO_TICKS(300));
-
-            send_hex_flag = true;  // Set flag untuk mencegah pengiriman berulang
+    while (1) {
+        // Hanya aktif jika screen 1 sedang aktif
+        if (lv_scr_act() == guider_ui.screen_1) {
+            if (is_charge) {
+                digitalWrite(MOSFET_PIN_1, HIGH);  // Aktifkan MOSFET (HIGH)
+                lv_label_set_text(guider_ui.screen_1_label_6, "Charge");  // Update label
+            } else {
+                digitalWrite(MOSFET_PIN_1, LOW);  // Nonaktifkan MOSFET (LOW)
+                lv_label_set_text(guider_ui.screen_1_label_6, "Discharge");  // Update label
+            }
+            is_charge = !is_charge;
         }
-    } else {
-        send_hex_flag = false;  // Reset flag jika tombol tidak ditekan
+        vTaskDelay(pdMS_TO_TICKS(5000));  // Delay 5 detik
     }
 }
 
-// --- Task untuk memonitor touch dan cek apakah tombol 3 ditekan ---
+void mosfetControlTask2(void *pvParameters) {
+    static bool is_charge = true;  // Status awal adalah "Charge"
+
+    while (1) {
+        // Hanya aktif jika screen 2 sedang aktif
+        if (lv_scr_act() == guider_ui.screen_2) {
+            if (is_charge) {
+                digitalWrite(MOSFET_PIN_2, HIGH);  // Aktifkan MOSFET (HIGH)
+                lv_label_set_text(guider_ui.screen_2_label_6, "Charge");  // Update label
+            } else {
+                digitalWrite(MOSFET_PIN_2, LOW);  // Nonaktifkan MOSFET (LOW)
+                lv_label_set_text(guider_ui.screen_2_label_6, "Discharge");  // Update label
+            }
+            is_charge = !is_charge;  // Toggle status untuk pergantian
+        }
+        vTaskDelay(pdMS_TO_TICKS(5000));  // Delay 5 detik
+    }
+}
+
+//========== CALLBACK UNTUK EVENT TOMBOL ==========
+void btn3_event_handler(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (!send_hex_flag) {
+            uint8_t data = 0xFA;
+            for (int i = 0; i < 3; i++) {
+                Serial2.write(data);
+                vTaskDelay(pdMS_TO_TICKS(300));  // Tetap gunakan delay di sini
+            }
+            Serial.println("=== DATA DIKIRIM ===");
+            send_hex_flag = true;
+        }
+    } else {
+        send_hex_flag = false;
+    }
+}
+
+//========== TASK UNTUK MONITOR SCREEN ==========
 void screenMonitorTask(void *pvParameters) {
     lv_obj_t *lastScreen = NULL;
-
-    pinMode(mosfetPin, OUTPUT); // Atur pin MOSFET sebagai output
-    digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat awal
 
     while (1) {
         lv_obj_t *currentScreen = lv_scr_act();  // Ambil screen aktif saat ini
@@ -137,26 +167,11 @@ void screenMonitorTask(void *pvParameters) {
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
-                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
-
             } else if (currentScreen == guider_ui.screen_2) {
                 Serial.println("SCREEN 2");
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
-
-                while (lv_scr_act() == guider_ui.screen_2) {
-                    Serial.println("MOSFET: Charging");
-                    digitalWrite(mosfetPin, HIGH); // Nyalakan MOSFET
-                    lv_label_set_text(guider_ui.screen_2_label_6, "--CHARGING--");
-                    vTaskDelay(pdMS_TO_TICKS(5000)); // Tunggu 5 detik
-
-                    Serial.println("MOSFET: In Use");
-                    digitalWrite(mosfetPin, LOW); // Matikan MOSFET
-                    lv_label_set_text(guider_ui.screen_2_label_6, "--IN USE--");
-                    vTaskDelay(pdMS_TO_TICKS(5000)); // Tunggu 5 detik
-                }
-
             } else if (currentScreen == guider_ui.screen_3) {
                 Serial.println("SCREEN 3");
 
@@ -170,14 +185,11 @@ void screenMonitorTask(void *pvParameters) {
                 if (uartTaskHandle != NULL) {
                     vTaskResume(uartTaskHandle);  // Resume UART task
                 }
-                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
-
             } else {
                 Serial.println("Aktif: Screen tidak diketahui");
                 if (uartTaskHandle != NULL) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
-                digitalWrite(mosfetPin, LOW); // Pastikan MOSFET mati saat layar bukan screen_2
             }
         }
 
@@ -185,20 +197,57 @@ void screenMonitorTask(void *pvParameters) {
     }
 }
 
-// --- Inisialisasi UI dan event handler ---
+//========== FUNGSI UNTUK UPDATE LABEL ==========
+void update_labels_async(void *param) {
+    int *values = (int *)param;
+    char buf[16];
+
+    // Update label tilting (Screen 3)
+    sprintf(buf, "%d", values[0]);
+    lv_label_set_text(guider_ui.screen_3_label_3, buf);
+    
+    // Update label trendent (Screen 3)
+    sprintf(buf, "%d", values[1]);
+    lv_label_set_text(guider_ui.screen_3_label_5, buf);
+
+    // Update label infrared (Screen 3)
+    if (values[2] == 1) {
+        lv_label_set_text(guider_ui.screen_3_label_7, "Error");
+    } else {
+        lv_label_set_text(guider_ui.screen_3_label_7, "Normal");
+    }
+
+    // Update label MOSFET (Screen 1)
+    if (values[3] == 1) {
+        lv_label_set_text(guider_ui.screen_1_label_6, "Charge");
+    } else if (values[3] == 0) {
+        lv_label_set_text(guider_ui.screen_1_label_6, "Discharge");
+    }
+
+    // Update label MOSFET (Screen 2)
+    if (values[4] == 1) {
+        lv_label_set_text(guider_ui.screen_2_label_6, "Charge");
+    } else if (values[4] == 0) {
+        lv_label_set_text(guider_ui.screen_2_label_6, "Discharge");
+    }
+
+    free(values);
+}
+
+//========== INISIALISASI UI ==========
 void init_ui() {
     setup_ui(&guider_ui);          
     events_init(&guider_ui);
     init_scr_del_flag(&guider_ui);
 }
 
-//--- Task utama LVGL ---
+//========== TASK UTAMA LVGL ==========
 void lvglTask(void *pvParameters) {
     TickType_t lastWakeTime = xTaskGetTickCount();
     while (1) {
-        lv_tick_inc(5);
+        lv_tick_inc(10);
         lv_timer_handler();
-        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(5));
+        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(10));
     }
 }
 
@@ -245,39 +294,6 @@ void decodeData(uint32_t encodedData) {
                   motorC == 1 ? "On" : "Off");
 }
 
-// Fungsi update tampilan LVGL dengan nilai tilting, trendent, dan statusInfrared  
-void update_labels_async(void *param) {
-    int *values = (int *)param;
-    char buf[16];
-
-    // Update label tilting
-    sprintf(buf, "%d", values[0]);
-    lv_label_set_text(guider_ui.screen_3_label_3, buf);
-
-    // Update label trendent
-    sprintf(buf, "%d", values[1]);
-    lv_label_set_text(guider_ui.screen_3_label_5, buf);
-
-    // Update label infrared
-    if (values[2] == 1) {
-        lv_label_set_text(guider_ui.screen_3_label_7, "Error");
-    } else {
-        lv_label_set_text(guider_ui.screen_3_label_7, "Normal");
-    }
-
-    // Update label MOSFET status (screen 2 label 6)
-    if (lv_scr_act() == guider_ui.screen_2) {
-        if (values[3] == HIGH) {
-            lv_label_set_text(guider_ui.screen_2_label_6, "Charging");
-        } else {
-            lv_label_set_text(guider_ui.screen_2_label_6, "In Use");
-        }
-    }
-
-    free(values);
-}
-
-// Task untuk membaca data dari Serial2 dan update UI
 void uartTask(void *pvParameters) {
     // Inisialisasi Serial2 untuk komunikasi UART
     Serial2.begin(9600, SERIAL_8N1, 44, 43); 
@@ -297,13 +313,14 @@ void uartTask(void *pvParameters) {
                 Serial.printf("Encoded Data: 0x%08X\n", encodedData);
                 decodeData(encodedData);
                 
-                // Alokasikan array untuk 4 integer (tilting, trendent, infrared, MOSFET status)
-                int *values = (int *)malloc(4 * sizeof(int));
+                // Alokasikan array untuk 5 integer (tilting, trendent, infrared, MOSFET Screen 1, MOSFET Screen 2)
+                int *values = (int *)malloc(5 * sizeof(int));
                 if (values) {
                     values[0] = tilting;
                     values[1] = trendent;
                     values[2] = statusInfrared;
-                    values[3] = digitalRead(TFT_BL); // Assume MOSFET status is read from TFT_BL pin
+                    values[3] = digitalRead(MOSFET_PIN_2); // Status MOSFET Screen 1
+                    values[4] = digitalRead(MOSFET_PIN_1); // Status MOSFET Screen 2
                     lv_async_call(update_labels_async, (void *)values);
                 } else {
                     Serial.println("Error alokasi memori untuk update UI!");
@@ -323,15 +340,25 @@ void setup() {
     Serial.begin(9600);
     mutex_manager.initMutex();
     
+    pinMode(MOSFET_PIN_1, OUTPUT);  // Atur GPIO 4 sebagai output untuk kontrol MOSFET pertama
+    digitalWrite(MOSFET_PIN_1, LOW);  // Pastikan MOSFET pertama dalam kondisi awal nonaktif
+
+    pinMode(MOSFET_PIN_2, OUTPUT);  // Atur GPIO 5 sebagai output untuk kontrol MOSFET kedua
+    digitalWrite(MOSFET_PIN_2, LOW);  // Pastikan MOSFET kedua dalam kondisi awal nonaktif
+    
     init_display();
     init_touch();
     init_ui();
     
-    // Buat task LVGL, touch, dan UART pada core yang sesuai
+    // Buat task LVGL, touch, UART, dan screen monitor pada core yang sesuai
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(uartTask, "UART Task", 4096, NULL, 1, &uartTaskHandle, 1);  // Simpan handle task UART
     xTaskCreatePinnedToCore(screenMonitorTask, "Screen Monitor Task", 2048, NULL, 1, NULL, 1);
+
+    // Tambahkan task untuk kontrol MOSFET
+    xTaskCreatePinnedToCore(mosfetControlTask1, "MOSFET Control Task", 2048, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(mosfetControlTask2, "MOSFET Control Task 2", 2048, NULL, 1, NULL, 1);  // Task untuk MOSFET kedua
 
     Serial.println("Setup complete, running.");
 }
