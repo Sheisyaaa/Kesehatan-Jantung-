@@ -17,8 +17,8 @@
 #define TFT_DC   41
 #define TFT_RST  42
 #define TFT_BL   38
-#define MOSFET_PIN_1  5
-#define MOSFET_PIN_2  4 
+#define MOSFET_PIN_1  4
+#define MOSFET_PIN_2  5 
 
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 170
@@ -101,12 +101,30 @@ void mosfetAlternatingTask(void *pvParameters) {
         digitalWrite(MOSFET_PIN_1, HIGH);
         digitalWrite(MOSFET_PIN_2, LOW);
         Serial.println("MOSFET 1 ON, MOSFET 2 OFF");
+
+        // Perbarui label di screen 1 dan screen 2
+        if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
+            lv_label_set_text(guider_ui.screen_1_label_6, "CHARGE");
+        }
+        if (lv_obj_is_valid(guider_ui.screen_2_label_6)) {
+            lv_label_set_text(guider_ui.screen_2_label_6, "DISCHARGE");
+        }
+
         vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
 
         // Matikan MOSFET 1, nyalakan MOSFET 2
         digitalWrite(MOSFET_PIN_1, LOW);
         digitalWrite(MOSFET_PIN_2, HIGH);
         Serial.println("MOSFET 1 OFF, MOSFET 2 ON");
+
+        // Perbarui label di screen 1 dan screen 2
+        if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
+            lv_label_set_text(guider_ui.screen_1_label_6, "DISCHARGE");
+        }
+        if (lv_obj_is_valid(guider_ui.screen_2_label_6)) {
+            lv_label_set_text(guider_ui.screen_2_label_6, "CHARGE");
+        }
+
         vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
     }
 }

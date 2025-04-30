@@ -175,10 +175,11 @@ LV_FONT_DECLARE(lv_font_MonaSans_Variable_18)
 LV_FONT_DECLARE(lv_font_montserratMedium_16)
 LV_FONT_DECLARE(lv_font_MonaSans_Variable_16)
 LV_FONT_DECLARE(lv_font_MonaSans_Variable_9)
-LV_FONT_DECLARE(lv_font_MonaSans_Variable_12)
+LV_FONT_DECLARE(lv_font_MonaSans_Variable_15)
 LV_FONT_DECLARE(lv_font_MonaSans_Variable_11)
 LV_FONT_DECLARE(lv_font_MonaSans_Variable_10)
 LV_FONT_DECLARE(lv_font_montserratMedium_12)
+LV_FONT_DECLARE(lv_font_MonaSans_Variable_12)
 LV_FONT_DECLARE(lv_font_MonaSans_Variable_14)
 
 

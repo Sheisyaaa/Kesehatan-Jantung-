@@ -169,16 +169,16 @@ void setup_scr_screen_1(lv_ui *ui)
 
     //Write codes screen_1_label_6
     ui->screen_1_label_6 = lv_label_create(ui->screen_1);
-    lv_obj_set_pos(ui->screen_1_label_6, 86, 17);
-    lv_obj_set_size(ui->screen_1_label_6, 53, 17);
-    lv_label_set_text(ui->screen_1_label_6, "In Use");
+    lv_obj_set_pos(ui->screen_1_label_6, 87, 12);
+    lv_obj_set_size(ui->screen_1_label_6, 125, 17);
+    lv_label_set_text(ui->screen_1_label_6, "Menunggu...");
     lv_label_set_long_mode(ui->screen_1_label_6, LV_LABEL_LONG_WRAP);
 
     //Write style for screen_1_label_6, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_border_width(ui->screen_1_label_6, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_radius(ui->screen_1_label_6, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(ui->screen_1_label_6, lv_color_hex(0x00ff71), LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui->screen_1_label_6, &lv_font_MonaSans_Variable_12, LV_PART_MAIN|LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui->screen_1_label_6, &lv_font_MonaSans_Variable_15, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui->screen_1_label_6, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_text_letter_space(ui->screen_1_label_6, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_text_line_space(ui->screen_1_label_6, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
