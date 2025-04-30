@@ -19,6 +19,8 @@
 #define TFT_BL   38
 #define MOSFET_PIN_1  4
 #define MOSFET_PIN_2  5 
+#define MOSFET_PIN_3  6
+#define MOSFET_PIN_4  7 
 
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 170
@@ -100,7 +102,9 @@ void mosfetAlternatingTask(void *pvParameters) {
         // Nyalakan MOSFET 1, matikan MOSFET 2
         digitalWrite(MOSFET_PIN_1, HIGH);
         digitalWrite(MOSFET_PIN_2, LOW);
-        Serial.println("MOSFET 1 ON, MOSFET 2 OFF");
+        digitalWrite(MOSFET_PIN_3, HIGH);
+        digitalWrite(MOSFET_PIN_4, LOW);
+        Serial.println("MOSFET 1 ON, MOSFET 2 OFF, MOSFET 3 ON, MOSFET 4 OFF");
 
         // Perbarui label di screen 1 dan screen 2
         if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
@@ -115,7 +119,9 @@ void mosfetAlternatingTask(void *pvParameters) {
         // Matikan MOSFET 1, nyalakan MOSFET 2
         digitalWrite(MOSFET_PIN_1, LOW);
         digitalWrite(MOSFET_PIN_2, HIGH);
-        Serial.println("MOSFET 1 OFF, MOSFET 2 ON");
+        digitalWrite(MOSFET_PIN_3, LOW);
+        digitalWrite(MOSFET_PIN_4, HIGH);
+        Serial.println("MOSFET 1 OFF, MOSFET 2 ON, MOSFET 3 OFF, MOSFET 4 ON");
 
         // Perbarui label di screen 1 dan screen 2
         if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
