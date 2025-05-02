@@ -307,8 +307,11 @@ void uartTask(void *pvParameters) {
                     values[0] = tilting;
                     values[1] = trendent;
                     values[2] = statusInfrared;
-                    values[3] = digitalRead(MOSFET_PIN_2); // Status MOSFET Screen 1
-                    values[4] = digitalRead(MOSFET_PIN_1); // Status MOSFET Screen 2
+                    // values[3] = digitalRead(MOSFET_PIN_1); // Status MOSFET Screen 1
+                    // values[4] = digitalRead(MOSFET_PIN_2); // Status MOSFET Screen 2
+                    // values[5] = digitalRead(MOSFET_PIN_3); // Status MOSFET Screen 2
+                    // values[6] = digitalRead(MOSFET_PIN_4); // Status MOSFET Screen 2
+
                     lv_async_call(update_labels_async, (void *)values);
                 } else {
                     Serial.println("Error alokasi memori untuk update UI!");
@@ -332,7 +335,13 @@ void setup() {
     digitalWrite(MOSFET_PIN_1, LOW);  
 
     pinMode(MOSFET_PIN_2, OUTPUT);  
-    digitalWrite(MOSFET_PIN_2, LOW); 
+    digitalWrite(MOSFET_PIN_2, LOW);
+    
+    pinMode(MOSFET_PIN_3, OUTPUT);
+    digitalWrite(MOSFET_PIN_3, LOW);
+
+    pinMode(MOSFET_PIN_4, OUTPUT);
+    digitalWrite(MOSFET_PIN_4, LOW);
     
     init_display();
     init_touch();
