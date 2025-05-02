@@ -40,8 +40,10 @@ volatile uint16_t touch_x = 0, touch_y = 0;
 volatile int touch_state = 0;
 
 bool send_hex_flag = false;
+bool isCharging = false;
 
 TaskHandle_t uartTaskHandle = NULL;  
+SemaphoreHandle_t labelMutex;
 
 //========== CALLBACK UNTUK DISPLAY DAN TOUCH ==========
 void lvgl_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p) {
@@ -99,39 +101,27 @@ void init_touch() {
 //========== TASK UNTUK KONTROL MOSFET ==========
 void mosfetAlternatingTask(void *pvParameters) {
     while (1) {
-        // Nyalakan MOSFET 1, matikan MOSFET 2
-        digitalWrite(MOSFET_PIN_1, HIGH);
-        digitalWrite(MOSFET_PIN_2, LOW);
-        digitalWrite(MOSFET_PIN_3, HIGH);
-        digitalWrite(MOSFET_PIN_4, LOW);
-        Serial.println("MOSFET 1 ON, MOSFET 2 OFF, MOSFET 3 ON, MOSFET 4 OFF");
-
-        // Perbarui label di screen 1 dan screen 2
-        if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
-            lv_label_set_text(guider_ui.screen_1_label_6, "CHARGE");
+        if (xSemaphoreTake(labelMutex, portMAX_DELAY)) {
+            digitalWrite(MOSFET_PIN_1, HIGH);
+            digitalWrite(MOSFET_PIN_2, LOW);
+            digitalWrite(MOSFET_PIN_3, HIGH);
+            digitalWrite(MOSFET_PIN_4, LOW);
+            isCharging = true;
+            Serial.println("MOSFET 1 ON, MOSFET 2 OFF, MOSFET 3 ON, MOSFET 4 OFF");
+            xSemaphoreGive(labelMutex);
         }
-        if (lv_obj_is_valid(guider_ui.screen_2_label_6)) {
-            lv_label_set_text(guider_ui.screen_2_label_6, "DISCHARGE");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        if (xSemaphoreTake(labelMutex, portMAX_DELAY)) {
+            digitalWrite(MOSFET_PIN_1, LOW);
+            digitalWrite(MOSFET_PIN_2, HIGH);
+            digitalWrite(MOSFET_PIN_3, LOW);
+            digitalWrite(MOSFET_PIN_4, HIGH);
+            isCharging = false;
+            Serial.println("MOSFET 1 OFF, MOSFET 2 ON, MOSFET 3 OFF, MOSFET 4 ON");
+            xSemaphoreGive(labelMutex);
         }
-
-        vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
-
-        // Matikan MOSFET 1, nyalakan MOSFET 2
-        digitalWrite(MOSFET_PIN_1, LOW);
-        digitalWrite(MOSFET_PIN_2, HIGH);
-        digitalWrite(MOSFET_PIN_3, LOW);
-        digitalWrite(MOSFET_PIN_4, HIGH);
-        Serial.println("MOSFET 1 OFF, MOSFET 2 ON, MOSFET 3 OFF, MOSFET 4 ON");
-
-        // Perbarui label di screen 1 dan screen 2
-        if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
-            lv_label_set_text(guider_ui.screen_1_label_6, "DISCHARGE");
-        }
-        if (lv_obj_is_valid(guider_ui.screen_2_label_6)) {
-            lv_label_set_text(guider_ui.screen_2_label_6, "CHARGE");
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(5000)); // Delay 5 detik
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
@@ -193,6 +183,20 @@ void screenMonitorTask(void *pvParameters) {
                     vTaskSuspend(uartTaskHandle);  // Suspend UART task
                 }
             }
+        }
+
+        // Update label berdasarkan layar aktif
+        if (xSemaphoreTake(labelMutex, portMAX_DELAY)) {
+            if (currentScreen == guider_ui.screen_1) {
+                if (lv_obj_is_valid(guider_ui.screen_1_label_6)) {
+                    lv_label_set_text(guider_ui.screen_1_label_6, isCharging ? "CHARGE" : "DISCHARGE");
+                }
+            } else if (currentScreen == guider_ui.screen_2) {
+                if (lv_obj_is_valid(guider_ui.screen_2_label_6)) {
+                    lv_label_set_text(guider_ui.screen_2_label_6, isCharging ? "DISCHARGE" : "CHARGE");
+                }
+            }
+            xSemaphoreGive(labelMutex);
         }
 
         vTaskDelay(pdMS_TO_TICKS(500)); // Delay 500 ms (0.5 detik)
@@ -347,6 +351,8 @@ void setup() {
     init_touch();
     init_ui();
     
+    labelMutex = xSemaphoreCreateMutex();
+
     // Buat task LVGL, touch, UART, dan screen monitor pada core yang sesuai
     xTaskCreatePinnedToCore(lvglTask, "LVGL Task", 8192, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(touchTask, "Touch Task", 4096, NULL, 1, NULL, 0);
