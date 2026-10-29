@@ -17,6 +17,8 @@
 #define TOUCH_WIDTH 320
 #define TOUCH_HEIGHT 170
 
+TwoWire TouchWire = TwoWire(0);
+
 #define CHSC6540_ADDR (uint8_t)(0x2E) // 写入地址，7bit-0x2E，bit-0x5C
 
 #define CNT_FOR_POINT 3 // Read data at one time
@@ -52,13 +54,13 @@ void reset()
 uint8_t readData(uint8_t *buf, uint8_t size)
 {
     uint8_t ret = 0;
-    Wire.beginTransmission((uint8_t)0x2E);
-    if (Wire.endTransmission() == 0)
+    TouchWire.beginTransmission((uint8_t)0x2E);
+    if (TouchWire.endTransmission() == 0)
     {
-        Wire.requestFrom(CHSC6540_ADDR, size);
+        TouchWire.requestFrom(CHSC6540_ADDR, size);
         for (uint8_t i = 0; i < size; i++)
         {
-            buf[i] = Wire.read();
+            buf[i] = TouchWire.read();
         }
         ret = 1;
     }
